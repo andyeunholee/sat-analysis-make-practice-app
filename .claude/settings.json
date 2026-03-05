@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(streamlit run app.py --server.port 8501)",
+      "Bash(pip install --force-reinstall fpdf2==2.8.7)"
+    ]
+  }
+}
