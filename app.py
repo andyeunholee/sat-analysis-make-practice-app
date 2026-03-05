@@ -712,7 +712,7 @@ with st.sidebar:
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
         if Path("Elite-Logo.png").exists():
-            st.image("Elite-Logo.png", width='stretch')
+            st.image("Elite-Logo.png", use_container_width=True)
     
     st.markdown("<h2 style='text-align: center; color: #0C1E41; margin-top: -10px;'>Elite Prep</h2>", unsafe_allow_html=True)
     
