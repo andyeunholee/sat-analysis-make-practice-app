@@ -149,7 +149,7 @@ def get_gemini_response(input_prompt, content_parts, temperature=0.2):
         full_payload = [input_prompt] + content_parts
 
         response = client.models.generate_content(
-            model='gemini-2.0-flash',
+            model='gemini-2.5-flash',
             contents=full_payload,
             config=types.GenerateContentConfig(
                 temperature=temperature,
