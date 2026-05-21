@@ -27,8 +27,8 @@ def clean_text_for_export(text):
     # Encoding to latin-1 with 'ignore' strips Hangul and Emojis.
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
-# Load environment variables
-load_dotenv()
+# Load environment variables (override=True ensures .env wins over stale OS env)
+load_dotenv(override=True)
 
 # Page Configuration
 st.set_page_config(
@@ -153,18 +153,22 @@ def get_gemini_response(input_prompt, content_parts, temperature=0.2):
             contents=full_payload,
             config=types.GenerateContentConfig(
                 temperature=temperature,
-                max_output_tokens=8192,
+                max_output_tokens=32768,
             ),
         )
 
-        # Safe access to text
+        # Check finish_reason to detect truncation
+        finish_reason = None
+        if response.candidates:
+            finish_reason = response.candidates[0].finish_reason
+            # finish_reason == 2 → MAX_TOKENS (truncated)
+            if finish_reason == 2:
+                st.warning("⚠️ The report was truncated due to length limits. Showing partial output. Consider simplifying the request.")
+
         try:
             return response.text
         except ValueError:
-            # Handle cases where response is blocked or empty
-            finish_reason = response.candidates[0].finish_reason if response.candidates else "UNKNOWN"
             st.error(f"Generation stopped. Finish Reason: {finish_reason}")
-            # If MAX_TOKENS (2), try to return what we have
             if finish_reason == 2 and response.candidates and response.candidates[0].content.parts:
                 return response.candidates[0].content.parts[0].text
             return None
