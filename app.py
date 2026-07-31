@@ -1010,7 +1010,7 @@ def convert_report_to_styled_docx(md_text):
         hero = _fixed_table(doc, [10080])
         _set_table_borders(hero, {})
         hc = hero.rows[0].cells[0]
-        _shade_cell(hc, '0B2545')
+        _shade_cell(hc, '3D6DB0')  # lighter navy-blue (was 0B2545)
         _set_cell_margins(hc, top=240, left=300, bottom=240, right=300)
         hp = hc.paragraphs[0]; _no_space(hp, 0, 2)
         _run(hp, 'ELITE PREP', 15, _WHITE, bold=True)
