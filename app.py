@@ -789,6 +789,62 @@ def _label_value(doc, label, value, justify=False):
     return p
 
 
+SAT_MAX_SCORE = 1600
+TARGET_MIN_GAIN = 50
+TARGET_MAX_GAIN = 100
+
+
+def _compute_target_score(peak):
+    """Target score = the student's highest total + 50 to 100 points, capped at
+    the SAT maximum of 1600. Returns a display string ('980 - 1030' or '1600')."""
+    try:
+        peak = int(peak)
+    except (TypeError, ValueError):
+        return ''
+    low = min(peak + TARGET_MIN_GAIN, SAT_MAX_SCORE)
+    high = min(peak + TARGET_MAX_GAIN, SAT_MAX_SCORE)
+    if low >= high:
+        return str(SAT_MAX_SCORE)
+    return f"{low} - {high}"
+
+
+def _peak_total_from_report(md):
+    """Highest total score across the student's tests. Reads the ```scores``` block
+    first, falling back to the 'Test Trajectory:' line. Returns None if unavailable."""
+    if not md:
+        return None
+    totals = []
+    sm = re.search(r'```scores\s*(\[.*?\])\s*```', md, re.DOTALL)
+    if sm:
+        try:
+            for e in json.loads(sm.group(1)):
+                t = e.get('total')
+                if isinstance(t, (int, float)):
+                    totals.append(int(t))
+        except Exception as ex:
+            print(f"scores block parse error (peak): {ex}")
+    if not totals:
+        m = re.search(r'Test Trajectory:\s*([^\n]+)', md)
+        if m:
+            totals = [int(s) for s in re.findall(r'(\d{3,4})', m.group(1))]
+    totals = [t for t in totals if 200 <= t <= SAT_MAX_SCORE]
+    return max(totals) if totals else None
+
+
+def enforce_target_score(md):
+    """Rewrite the report's 'Target Score' line so it always follows the
+    highest-score + 50~100 (max 1600) rule. Returns the report unchanged if the
+    peak score cannot be determined."""
+    if not md:
+        return md
+    target = _compute_target_score(_peak_total_from_report(md))
+    if not target:
+        return md
+    new_md, n = re.subn(r'(?im)^(\s*\**\s*Target Score\s*\**\s*:\s*\**\s*)(.*)$',
+                        lambda mm: f"{mm.group(1)}{target}", md, count=1)
+    return new_md if n else md
+
+
 def _parse_report(md):
     """Parse the generated markdown report into structured data. Defensive: any
     field that cannot be found is left empty rather than raising."""
@@ -877,6 +933,11 @@ def _parse_report(md):
         mm = re.search(rf'{label}:\s*\**\s*([^\n]+)', text)
         return _clean(mm.group(1)) if mm else ''
     data['target_score'] = _field('Target Score')
+    # The target is always derived from the student's own best result
+    # (highest total + 50~100, capped at 1600), never left to the model.
+    computed_target = _compute_target_score(_peak_total_from_report(text))
+    if computed_target:
+        data['target_score'] = computed_target
     data['goal'] = _field('Goal Breakdown')
     data['total_hours'] = _field(r'Total Tutoring Hours')
     data['split'] = _field('Split')
@@ -1420,8 +1481,8 @@ Performance Trend: [2–3 sentence narrative. Mention total score improvement, o
 ---
 
 ## Tutoring Recommendations & Logistics
-**Target Score:** [Score - use the Scoring Guidelines from the Knowledge Base based on their starting score]
-**Goal Breakdown:** [1–2 sentences: Math target, RW target, and why.]
+**Target Score:** [MANDATORY RULE — ignore the Knowledge Base score tiers here. Take the HIGHEST total score the student actually earned across all the tests provided, then add 50 to 100 points. Write it as a range, e.g. highest = 1000 -> "1050 - 1100". Never exceed 1600: cap both ends at 1600 (e.g. highest = 1560 -> "1600").]
+**Goal Breakdown:** [1–2 sentences: Math target, RW target, and why. The Math and RW targets MUST add up to the Target Score range above, and each section is capped at 800.]
 **Total Tutoring Hours:** [N] Hours [use the Scoring Guidelines]
 **Split:** [Math Hours] Hours Math / [RW Hours] Hours Reading & Writing. ([1 sentence justification.])
 **Frequency:** [Frequency from Scoring Guidelines]
@@ -1460,7 +1521,9 @@ Then, on a new line, append a RAW scores data block for the Score Trajectory cha
                     response_text = get_gemini_response(prompt, all_content)
                     
                     if response_text:
-                        st.session_state.full_report = response_text
+                        # Force the target score to follow the highest-score + 50~100
+                        # (max 1600) rule so the on-screen and Word reports agree.
+                        st.session_state.full_report = enforce_target_score(response_text)
                         st.session_state.analysis_done = True
                         
                         # Parse JSON
